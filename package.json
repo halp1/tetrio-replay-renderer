@@ -1,0 +1,21 @@
+{
+	"name": "tetrio-replay-renderer",
+	"module": "src/index.ts",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "bun src/index.ts"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	},
+	"dependencies": {
+		"@haelp/teto": "^3.1.6",
+		"puppeteer": "^24.11.0",
+		"puppeteer-screen-recorder": "^3.0.6",
+		"puppeteer-stream": "^3.0.20"
+	}
+}

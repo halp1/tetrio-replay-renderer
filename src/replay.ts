@@ -1,6 +1,3 @@
-import type { BagType, KickTable } from "../../engine";
-import { Game } from "../game";
-
 export interface Stats {
   altitude: number;
   apm: number;
@@ -42,7 +39,7 @@ export interface VersusReplay {
       naturalorder: number;
       replay: {
         frames: number;
-        events: Game.Replay.Frame[];
+        events: any[];
         options: {
           allow_harddrop: boolean;
           allclear_b2b: number;
@@ -53,12 +50,12 @@ export interface VersusReplay {
           b2bcharge_base: number;
           boardheight: number;
           boardwidth: number;
-          bagtype: BagType;
+          bagtype: string;
           b2bchaining: boolean;
           b2bcharging: boolean;
           bgmnoreset: boolean;
           countdown: boolean;
-          combotable: Game.ComboTable;
+          combotable: string;
           countdown_count: number;
           clutch: boolean;
           display_username: boolean;
@@ -69,7 +66,7 @@ export interface VersusReplay {
           gameid: number;
           garbagemultiplier: number;
           garbageincrease: number;
-          garbageblocking: Game.GarbageBlocking;
+          garbageblocking: string;
           garbagemargin: number;
           garbagespeed: number;
           garbageholesize: number;
@@ -79,15 +76,15 @@ export interface VersusReplay {
           garbagecapmax: number;
           garbageabsolutecap: number;
           garbagespecialbonus: boolean;
-          garbagetargetbonus: Game.GarbageTargetBonus;
+          garbagetargetbonus: string;
           g: number;
           gincrease: number;
           gmargin: number;
           gravitymay20g: boolean;
-          handling: Game.Handling;
+          handling: string;
           hasgarbage: boolean;
           infinite_hold: boolean;
-          kickset: KickTable;
+          kickset: string;
           latencymode: string;
           lockresets: number;
           manual_allowed: boolean;
@@ -102,10 +99,10 @@ export interface VersusReplay {
           noextrawidth: boolean;
           nolockout: boolean;
           openerphase: number;
-          passthrough: Game.Passthrough;
+          passthrough: string;
           precountdown: number;
           prestart: number;
-          roundmode: Game.RoundingMode;
+          roundmode: string;
           seed: number;
           seed_random: boolean;
           slot_bar1: string;
@@ -115,7 +112,7 @@ export interface VersusReplay {
           slot_counter4?: string;
           slot_counter5?: string;
           song: string;
-          spinbonuses: Game.SpinBonuses;
+          spinbonuses: string;
           usebombs: boolean;
           username: string;
           version: number;

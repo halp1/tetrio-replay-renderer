@@ -4,12 +4,25 @@ import { Utils } from "@haelp/teto";
 import path from "node:path";
 import type { VersusReplay } from "./replay";
 import fs from "node:fs";
+import { exec, execSync } from "node:child_process";
 
 export namespace renderer {
+	export const STORAGE_FOLDER = process.env.STORAGE_FOLDER ?? "/tmp/tetrio-renderer";
+	/** mp4 doesn't handle audio correctly */
+	export const FORMAT: "webm" | "mp4" = "webm";
+
+  try {
+    execSync("ffmpeg -version", { stdio: "ignore" });
+  } catch (err) {
+    throw new Error(
+      "ffmpeg is not installed or not found in PATH. tetrio-replay-renderer requires ffmpeg to function."
+    );
+  }
+
   let browser: Awaited<ReturnType<typeof launch>>;
 
   export const ready = launch({
-    headless: false,
+    headless: "new",
     defaultViewport: { width: 1920, height: 1080 },
     args: ["--window-size=1920,1150"],
     executablePath: executablePath(),
@@ -104,15 +117,7 @@ export namespace renderer {
     end: number;
   }
 
-  export const render = async (
-    replay: VersusReplay,
-    targets: Target[] = [],
-    onProgress: (current: number, steps: number) => void
-  ) => {
-    const steps = 5;
-    let step = 0;
-    const t = () => onProgress(++step, steps);
-
+  export const render = async (replay: VersusReplay, targets: Target[] = []) => {
     const api = new Utils.API({
       token: config.token,
     });
@@ -125,7 +130,6 @@ export namespace renderer {
     const lastPatch = Object.keys(patchNotes)[0]!;
 
     const page = await browser.newPage();
-    t();
 
     await blockAds(page);
 
@@ -134,7 +138,6 @@ export namespace renderer {
     );
 
     await page.goto("https://tetr.io/");
-    t();
 
     await page.evaluate(
       (config, userData, lastPatch) => {
@@ -154,12 +157,14 @@ export namespace renderer {
     );
 
     await page.reload();
-    t();
 
     await page.waitForSelector("#return_button");
     page.click("#return_button");
-    t();
-    await new Promise((resolve) => setTimeout(resolve, 4000));
+
+    await page.waitForFunction(() => {
+      const el = document.getElementById("menus");
+      return el && !el.classList.contains("hidden");
+    });
 
     await dropBlobObject(
       page,
@@ -168,15 +173,42 @@ export namespace renderer {
       "replay.ttrm",
       "application/json"
     );
-    t();
 
-    // wait a long time for the online users notification to go away
-    await new Promise((resolve) => setTimeout(resolve, 7000));
+    await page.waitForFunction(() => {
+      const el = document.querySelector(".noreplay");
+      return el && !el.classList.contains("hidden");
+    });
+
+    const currentStatus = await page.evaluate(() =>
+      (document.querySelector("#social_status img")! as HTMLImageElement).src
+        .replaceAll("https://tetr.io/res/status/", "")
+        .replaceAll(".png", "")
+    );
+
+    await page.evaluate(() => {
+      (document.querySelector("#social_status") as HTMLDivElement).click();
+      (document.querySelector('[data-id="busy"]') as HTMLDivElement).click();
+    });
+
+    await page.waitForFunction(() => {
+      const el = document.getElementById("notifications");
+      return el && el.offsetHeight === 0;
+    });
 
     const results: string[] = [];
 
+    if (!(await fs.promises.exists(STORAGE_FOLDER))) {
+      await fs.promises.mkdir(STORAGE_FOLDER, { recursive: true });
+    }
+
+    await page.evaluate(() => {
+      const replaytools = document.getElementById("replaytools");
+      if (replaytools) replaytools.style.opacity = "0";
+    });
+
     for (const target of targets) {
-      const out = path.join("/tmp/tetrio-recordings", `${Date.now()}.webm`);
+      const targetId = Date.now().toString();
+      const out = path.join(STORAGE_FOLDER, `${targetId}.${FORMAT}`);
       const file = fs.createWriteStream(out);
 
       const rounds = await page.$$(".multilog_result_self");
@@ -186,7 +218,10 @@ export namespace renderer {
       }
       rounds[target.round]?.click();
 
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await page.waitForFunction(() => {
+        const el = document.getElementById("replaytools");
+        return el && !el.classList.contains("disabled");
+      });
 
       await page.evaluate(() => {
         const pauseButton = document.querySelector("#replaytools_button_playpause");
@@ -216,6 +251,13 @@ export namespace renderer {
             clientY: 0,
           })
         );
+
+        document.querySelector("#replaytools_seekbar")?.dispatchEvent(
+          new MouseEvent("mouseup", {
+            clientX: startX,
+            clientY: 0,
+          })
+        );
       }, startX);
 
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -223,9 +265,8 @@ export namespace renderer {
       const stream = await getStream(page, {
         audio: true,
         video: true,
-				mimeType: "video/webm"
+        mimeType: `video/${FORMAT}`,
       });
-
 
       stream.pipe(file);
 
@@ -247,16 +288,37 @@ export namespace renderer {
         }
       }, target.end);
 
-      file.close();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
       stream.destroy();
+      file.close();
+      await new Promise((res, rej) =>
+        exec(
+          `ffmpeg -i ${out} -c copy ${out.replace(".", "-final.")}`,
+          (error, stdout) => {
+            if (error) {
+              rej(error);
+              return;
+            }
+            res(stdout);
+          }
+        )
+      );
+      await fs.promises.unlink(out);
+      await fs.promises.rename(out.replace(".", "-final."), out);
 
       await page.evaluate(() => {
         const exitButton = document.querySelector("#exit_replay");
         if (exitButton) (exitButton as HTMLDivElement).click();
       });
 
-      results.push(out);
+      results.push(`${targetId}.${FORMAT}`);
     }
+
+    await page.evaluate((currentStatus) => {
+      (document.querySelector("#social_status") as HTMLDivElement).click();
+      (document.querySelector(`[data-id="${currentStatus}"]`) as HTMLDivElement).click();
+    }, currentStatus);
 
     return results;
   };
